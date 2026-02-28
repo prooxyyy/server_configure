@@ -17,13 +17,13 @@ net.ipv4.netfilter.ip_conntrack_max = 1048576
 net.ipv4.tcp_max_tw_buckets = 1440000
 net.ipv4.tcp_tw_reuse = 1
 net.ipv4.tcp_tw_recycle = 1
-net.ipv4.tcp_synack_retries = 2
-#net.ipv4.tcp_syncookies = 1 по рекомендациям разрабов лучше вырубить
-net.ipv4.tcp_syncookies = 0
+net.ipv4.tcp_synack_retries = 1
+net.ipv4.tcp_syncookies = 1 по рекомендациям глеба лучше врубить
+#net.ipv4.tcp_syncookies = 0
 net.ipv4.tcp_max_syn_backlog = 20000
-net.ipv4.tcp_fin_timeout = 30
+net.ipv4.tcp_fin_timeout = 10
 net.ipv4.tcp_keepalive_time = 300
-net.ipv4.tcp_keepalive_probes = 5
+net.ipv4.tcp_keepalive_probes = 2
 net.ipv4.tcp_wmem = 8192 65536 16777216
 net.ipv4.udp_wmem_min = 16384
 net.ipv4.tcp_rmem = 8192 87380 16777216
@@ -91,5 +91,29 @@ EOF
 sudo apt update
 
 sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
+
+cat > /usr/local/sbin/conntrack-off.sh <<'EOF'
+iptables -t raw -C PREROUTING -j CT --notrack 2>/dev/null || iptables -t raw -I PREROUTING 1 -j CT --notrack
+iptables -t raw -C OUTPUT     -j CT --notrack 2>/dev/null || iptables -t raw -I OUTPUT 1 -j CT --notrack
+EOF
+
+chmod +x /usr/local/sbin/conntrack-off.sh
+
+sudo tee /etc/systemd/system/conntrack-off.service >/dev/null <<'EOF'
+[Unit]
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/conntrack-off.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now notrack.service
 
 echo "Done! Better reboot"
